@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<schema xmlns="http://www.w3.org/2001/XMLSchema" xmlns:tns="uri:klape.com/files" targetNamespace="uri:klape.com/files" >
+  <element name="files">
+    <complexType>
+      <sequence>
+        <element name="file" type="tns:fileType" minOccurs="0" maxOccurs="unbounded">
+        </element>
+      </sequence>
+    </complexType>
+  </element>
+  <complexType name="fileType">
+    <sequence>
+      <element name="id" type="integer" minOccurs="1" maxOccurs="1"/>
+      <element name="name" type="string" minOccurs="1" maxOccurs="1"/>
+      <element name="contentType" type="string" minOccurs="1" maxOccurs="1"/>
+      <element name="path" type="string" minOccurs="1" maxOccurs="1"/>
+      <element name="size" type="string" minOccurs="1" maxOccurs="1"/>
+    </sequence>
+  </complexType>
+</schema>
