@@ -155,7 +155,9 @@ public class FileDao
       {
         try
         {
-          files.getFile().remove(i);
+          FileType f = files.getFile().remove(i);
+          File realFile = new File(f.getPath());
+          realFile.delete();
           persist();
           return file;
         }
