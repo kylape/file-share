@@ -5,11 +5,10 @@ import java.io.InputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-
 import java.text.DecimalFormat;
-
 import java.util.List;
 import java.util.ArrayList;
+import java.net.URLDecoder;
 
 import javax.activation.DataSource;
 import javax.activation.FileDataSource;
@@ -40,7 +39,10 @@ public class FileService
   {
     FileType file = dao.getById(id);
     if(file == null)
-      return Response.ok().entity(new FileWrapper()).type("application/json").build();
+    {
+      String json = "{\"success\": false, \"reason\": \"File ID not found\"}";
+      return Response.status(404).entity(json).type("application/json").build();
+    }
     File realFile = new File(file.getPath());
     FileDataSource fds = new FileDataSource(realFile);
     return Response.ok()
@@ -57,32 +59,29 @@ public class FileService
     @HeaderParam("X-File-Name") String filename, @HeaderParam("X-Mime-Type") String type)
     throws IOException, FileNotFoundException
   {
-    File realFile = new File(FILES_PATH + "/" + filename);
-
-    log.info("handler: " + handler.getClass().getName());
+    File newFile = null;
 
     if(handler instanceof FileDataSource)
     {
+      //The provider already did all the filesystem work, 
+      //so now just move it to the uploads folder.  
+      //Using MD5 hash as filename.
       File tempFile = ((FileDataSource)handler).getFile();
-      tempFile.renameTo(realFile);
+      newFile  = new File(FILES_PATH + "/" + tempFile.getName());
+      log.info("Rename again: " + newFile.getPath());
+      tempFile.renameTo(newFile);
     }
     else
     {
-      FileOutputStream fos = new FileOutputStream(realFile);
-      InputStream is = handler.getInputStream();
-
-      int i=0;
-      while((i=is.read()) != -1)
-      {
-        fos.write((byte)i);
-      }
+      log.error("Was expecting a FileDataSource, but instead got " + handler.getClass().getName());
+      return new FileWrapper().setSuccess("false");
     }
     
     FileType file = new FileType();
-    file.setPath(realFile.getAbsolutePath());
+    file.setPath(newFile.getAbsolutePath());
     file.setContentType(type);
-    file.setName(filename);
-    file.setSize(convertSize(realFile.length()));
+    file.setName(URLDecoder.decode(filename));
+    file.setSize(convertSize(newFile.length()));
 
     dao.add(file);
 
@@ -98,7 +97,6 @@ public class FileService
   @Produces({"application/json"})
   public String remove(@PathParam("id") int id)
   {
-    log.info("Deleting " + id);
     FileType ft = dao.remove(id);
     if(ft == null)
       throw new IllegalStateException("Failed to remove");
@@ -138,7 +136,10 @@ public class FileService
 
     double f = ((double)length) / Math.pow(2, exp);
 
-    return new DecimalFormat("0.0" + suffix).format(f);
+    if(suffix.equals("B"))
+      return "" + length + suffix;
+    else
+      return new DecimalFormat("0.0" + suffix).format(f);
   }
 
   private class FileWrapper
@@ -146,9 +147,10 @@ public class FileService
     private String success;
     private FileType file;
     
-    public void setSuccess(String success)
+    public FileWrapper setSuccess(String success)
     {
       this.success = success;
+      return this;
     }
 
     public String getSuccess()
@@ -156,9 +158,10 @@ public class FileService
       return success;
     }
 
-    public void setFile(FileType file)
+    public FileWrapper setFile(FileType file)
     {
       this.file = file;
+      return this;
     }
 
     public FileType getFile()
