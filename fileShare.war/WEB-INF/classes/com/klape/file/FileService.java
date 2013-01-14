@@ -2,6 +2,8 @@ package com.klape.file;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.FileInputStream;
+import java.io.OutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -20,6 +22,7 @@ import javax.ws.rs.DELETE;
 import javax.ws.rs.Produces;
 import javax.ws.rs.HeaderParam;
 import javax.ws.rs.PathParam;
+import javax.ws.rs.QueryParam;
 import javax.ejb.Stateless;
 
 import org.jboss.logging.Logger;
@@ -35,18 +38,31 @@ public class FileService
 
   @GET
   @Path("/{id}")
-  public Response download(@PathParam("id") int id)
+  public Response download(@PathParam("id") int id, @QueryParam("offset") String offsetParam)
   {
+    DataSource ds = null;
     FileType file = dao.getById(id);
+    File realFile = new File(file.getPath());
+
     if(file == null)
     {
       String json = "{\"success\": false, \"reason\": \"File ID not found\"}";
       return Response.status(404).entity(json).type("application/json").build();
     }
-    File realFile = new File(file.getPath());
-    FileDataSource fds = new FileDataSource(realFile);
+
+    if(offsetParam != null && !offsetParam.equals(""))
+    {
+      Integer offset = Integer.parseInt(offsetParam);
+      log.info("Using resuming data soruce with offset " + offset);
+      ds = new ResumingFileDataSource(realFile, offset, file.getContentType());
+    }
+    else
+    {
+      ds = new FileDataSource(realFile);
+    }
+
     return Response.ok()
-                   .entity(fds)
+                   .entity(ds)
                    .type(file.getContentType().equals("") ? "*/*" : file.getContentType())
                    .header("Content-Disposition","attachment; filename=\"" + file.getName() + "\"")
                    .build();
@@ -167,6 +183,42 @@ public class FileService
     public FileType getFile()
     {
       return file;
+    }
+  }
+
+  private class ResumingFileDataSource implements DataSource
+  {
+    private File file;
+    private int offset;
+    private String contentType;
+
+    public ResumingFileDataSource(File f, int offset, String contentType)
+    {
+      file = f;
+      this.offset = offset;
+      this.contentType = contentType;
+    }
+
+    public String getContentType()
+    {
+      return contentType;
+    }
+
+    public String getName()
+    {
+      return "";
+    }
+
+    public InputStream getInputStream() throws IOException
+    {
+      FileInputStream fis = new FileInputStream(file);
+      fis.skip(offset);
+      return fis;
+    }
+    
+    public OutputStream getOutputStream() throws IOException
+    {
+      throw new IOException("This data source not desinged for output");
     }
   }
 }
